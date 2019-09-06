@@ -1,0 +1,33 @@
+###########################################
+# Syntax Coloring Map For XELNetworkMaster
+###########################################
+
+###########################################
+# Datatypes (KEYWORD1)
+###########################################
+
+XELNetworkMaster	KEYWORD1
+
+
+###########################################
+# Methods and Functions (KEYWORD2)
+###########################################
+
+# XELNetworkMaster Functions
+initDXLMaster	KEYWORD2
+initROS2	KEYWORD2
+begin	KEYWORD2
+run	KEYWORD2
+
+
+
+###########################################
+# Structures (KEYWORD3)
+###########################################
+
+
+
+###########################################
+# Constants (LITERAL1)
+###########################################
+

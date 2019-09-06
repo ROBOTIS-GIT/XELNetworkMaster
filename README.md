@@ -1,2 +1,2 @@
-# XELNetworkMaster
-A library for communicating with ROS2 with the XELNetwork Slave (SensorXEL, PowerXEL, etc.), using Micro-XRCE-DDS and the master functions of the DYNAMIXEL protocol, such as CommXEL on XELNetwork.
+# XELNetworkMaster [![Build Status](https://travis-ci.org/ROBOTIS-GIT/XELNetworkMaster.svg?branch=master)](https://travis-ci.org/ROBOTIS-GIT/XELNetworkMaster/branches)
+
