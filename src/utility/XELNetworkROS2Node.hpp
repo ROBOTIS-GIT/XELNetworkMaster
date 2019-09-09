@@ -28,8 +28,8 @@ typedef struct TopicInfo{
 class XELNetworkROS2Node:public ros2::Node
 {
   public:
-    XELNetworkROS2Node()
-    : Node("xelnetwork_comm")
+    XELNetworkROS2Node(const char* node_name)
+    : Node(node_name)
     {}
 
     template <typename MsgT>

@@ -25,7 +25,9 @@ bool initDXLMaster(HardwareSerial& dxl_port_serial, int dxl_dir_pin);
 bool initROS2(Stream& comm_instance);
 bool initROS2(UDP& comm_instance, const char* p_agent_ip, uint16_t agent_port);
 bool initROS2(Client& comm_instance, const char* p_agent_ip, uint16_t agent_port);
-bool begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver, uint32_t auto_scan_interval_ms = 200);
+bool initNode(const char* node_name = "xelnetwork_comm");
+bool initScan(uint8_t start_id, uint8_t end_id, uint32_t interval_ms = 200);
+bool begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver = 2.0);
 void run();
 
 }//namespace XELNetworkMaster

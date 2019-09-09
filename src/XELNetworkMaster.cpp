@@ -21,9 +21,10 @@
 #include "utility/XELNetworkROS2Node.hpp"
 
 const uint8_t CONNECTED_XEL_MAX = 10;
-const uint8_t LIMITED_START_ID_FOR_SCAN = 0;
-const uint8_t LIMITED_END_ID_FOR_SCAN = 20;
 const uint8_t PING_RETRY_COUNT = 3;
+const uint8_t DEFAULT_START_ID_TO_SCAN = 0;
+const uint8_t DEFAULT_END_ID_TO_SCAN = 20;
+const uint32_t DEFAULT_SCAN_INTERVAL_MS = 200;
 
 enum XELStatusIdx{
   NOT_CONNECTTED = 0,
@@ -49,7 +50,9 @@ static DYNAMIXEL::Master *p_dxl_master;
 
 static XELInfo_t xel_table[CONNECTED_XEL_MAX];
 static uint8_t connected_xel_cnt;
-static uint32_t auto_scan_interval_ms;
+static uint8_t limited_start_id_to_scan = DEFAULT_START_ID_TO_SCAN;
+static uint8_t limited_end_id_to_scan = DEFAULT_END_ID_TO_SCAN;
+static uint32_t auto_scan_interval_ms = DEFAULT_SCAN_INTERVAL_MS;
 static bool is_init_dxl_master = false;
 static bool is_init_ros2 = false;
 
@@ -74,37 +77,66 @@ bool XELNetworkMaster::initDXLMaster(HardwareSerial& dxl_port_serial, int dxl_di
 
 bool XELNetworkMaster::initROS2(Stream& comm_instance)
 {
-  is_init_ros2 = ros2::init(&comm_instance);
+  if(is_init_ros2 == false)
+    is_init_ros2 = ros2::init(&comm_instance);
 
   return is_init_ros2;
 }
 
 bool XELNetworkMaster::initROS2(UDP& comm_instance, const char* p_agent_ip, uint16_t agent_port)
 {
-  is_init_ros2 = ros2::init(&comm_instance, p_agent_ip, agent_port);
+  if(is_init_ros2 == false)
+    is_init_ros2 = ros2::init(&comm_instance, p_agent_ip, agent_port);
   
   return is_init_ros2;
 }
 
 bool XELNetworkMaster::initROS2(Client& comm_instance, const char* p_agent_ip, uint16_t agent_port)
 {
-  is_init_ros2 = ros2::init(&comm_instance, p_agent_ip, agent_port);
+  if(is_init_ros2 == false)
+    is_init_ros2 = ros2::init(&comm_instance, p_agent_ip, agent_port);
 
   return is_init_ros2;
 }
 
-bool XELNetworkMaster::begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver, uint32_t auto_scan_interval_ms)
+bool XELNetworkMaster::initScan(uint8_t start_id, uint8_t end_id, uint32_t interval_ms)
+{
+  auto_scan_interval_ms = interval_ms;
+
+  if(start_id > 253 || end_id > 253 || start_id > end_id)
+    return false;
+
+  limited_start_id_to_scan = start_id;
+  limited_end_id_to_scan = end_id;
+
+  return true;
+}
+
+bool XELNetworkMaster::initNode(const char* node_name)
+{
+  if(p_ros2_node == nullptr)
+    p_ros2_node = new XELNetworkROS2Node(node_name);
+
+  return p_ros2_node!=nullptr?true:false;
+}
+
+bool XELNetworkMaster::begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver)
 {
   if(is_init_dxl_master == false || is_init_ros2 == false){
     return false;
   }
 
-  p_ros2_node = new XELNetworkROS2Node();
-
   p_dxl_port->begin(dxl_port_baud);
 
   if(p_dxl_master->setPortProtocolVersion(dxl_port_protocol_ver) == false)
     p_dxl_master->setPortProtocolVersion(2.0);
+
+  if(p_dxl_master->getPortProtocolVersion() == 2.0){
+    if(limited_start_id_to_scan > 252)
+      limited_start_id_to_scan = 252;
+    if(limited_end_id_to_scan > 252)
+      limited_end_id_to_scan = 252;
+  }
 
   scanXELsWhenBegin();
 
@@ -169,7 +201,7 @@ static void scanXELsWhenBegin()
   TopicItemHeader_t topic_item_header;
   XELInfo_t* p_xel;
 
-  for(uint8_t i_id = LIMITED_START_ID_FOR_SCAN; i_id <= LIMITED_END_ID_FOR_SCAN && connected_xel_cnt < CONNECTED_XEL_MAX; i_id++)
+  for(uint8_t i_id = limited_start_id_to_scan; i_id <= limited_end_id_to_scan && connected_xel_cnt < CONNECTED_XEL_MAX; i_id++)
   {
     if(p_dxl_master->ping(i_id, &ping_info, 1, 10) == 1){
       p_dxl_master->read(ping_info.id, 0, 2, (uint8_t*)&ping_info.model_number, sizeof(ping_info.model_number), 10);
@@ -202,13 +234,13 @@ static void scanXELsWhenBegin()
 
 static void scanXELEveryInterval()
 {
-  static uint8_t new_id = LIMITED_START_ID_FOR_SCAN;
+  static uint8_t new_id = limited_start_id_to_scan;
   static uint32_t pre_time;
   static uint8_t table_idx_to_check = 0;
   XelInfoFromPing_t ping_info;
   XELInfo_t* p_xel;
 
-  if(auto_scan_interval_ms == 0xFFFFFFFF || millis() - pre_time < auto_scan_interval_ms){
+  if(auto_scan_interval_ms == 0 || millis() - pre_time < auto_scan_interval_ms){
     return;
   }
   pre_time = millis();
