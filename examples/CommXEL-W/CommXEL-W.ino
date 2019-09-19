@@ -95,7 +95,7 @@ enum CommXELItemAddr{
   ADDR_DXL_MASTER_BAUDRATE       = 58,  //uint32_t
   ADDR_DXL_MASTER_PROTOCOL       = 59,  //uint8_t
   ADDR_WIFI_SSID                 = 60,  //32byte char
-  ADDR_WIFI_SSID_PW              = 92, //32byte char
+  ADDR_WIFI_SSID_PW              = 92,  //32byte char
   ADDR_MICRO_XRCE_DDS_AGENT_IP   = 124, //12byte char "xxx.xxx.xxx"
   ADDR_MICRO_XRCE_DDS_AGENT_PORT = 136  //uint16_t
 };
@@ -144,10 +144,16 @@ void getConfigFromEEPROM()
   if(EEPROM.readBytes(ADDR_DXL_SLAVE_BAUDRATE, (void*)&config_dxl_slave_baudrate_idx, sizeof(config_dxl_slave_baudrate_idx)) != 0){
     if(config_dxl_slave_baudrate_idx != 0xFF){
       dxl_slave_baudrate = getBaudrateValueFromIndex(config_dxl_slave_baudrate_idx);
-      config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);
+      if(dxl_slave_baudrate == 0){
+        dxl_slave_baudrate = 1000000;
+        config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);  
+      }
     }else{
       config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);
-      dxl_slave_baudrate = getBaudrateValueFromIndex(config_dxl_slave_baudrate_idx);
+      if(config_dxl_slave_baudrate_idx == 0xFF){
+        dxl_slave_baudrate = 1000000;
+        config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);  
+      }
     }
   }
 
@@ -186,19 +192,25 @@ void getConfigFromEEPROM()
   if(EEPROM.readBytes(ADDR_DXL_MASTER_BAUDRATE, (void*)&config_dxl_master_baudrate_idx, sizeof(config_dxl_master_baudrate_idx)) != 0){
     if(config_dxl_master_baudrate_idx != 0xFF){
       dxl_master_baudrate = getBaudrateValueFromIndex(config_dxl_master_baudrate_idx);
-      config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);
+      if(dxl_master_baudrate == 0){
+        dxl_master_baudrate = 1000000;
+        config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);  
+      }
     }else{
       config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);
-      dxl_master_baudrate = getBaudrateValueFromIndex(config_dxl_master_baudrate_idx);
+      if(config_dxl_master_baudrate_idx == 0xFF){
+        dxl_master_baudrate = 1000000;
+        config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);  
+      }
     }
+
   }
 
   if(EEPROM.readBytes(ADDR_DXL_MASTER_PROTOCOL, (void*)&config_dxl_master_protocol_ver, sizeof(config_dxl_master_protocol_ver)) != 0){
     if(config_dxl_master_protocol_ver != 0xFF){
       dxl_master_protocol_ver = config_dxl_master_protocol_ver==1?1.0:2.0;
-    }else{
-      config_dxl_master_protocol_ver = dxl_master_protocol_ver==1.0?1:2;
     }
+    config_dxl_master_protocol_ver = dxl_master_protocol_ver==1.0?1:2;
   }
 
   if(EEPROM.readBytes(ADDR_WIFI_SSID, (void*)config_wifi_ssid, sizeof(config_wifi_ssid)) != 0){
@@ -243,27 +255,38 @@ void runDXLSlaveToConfig()
 // If you use dxl_err_code, you can send the packet's error code to the Master.
 // See the DYNAMIXEL Protocol documentation for this. 
 // (http://emanual.robotis.com/docs/kr/dxl/protocol2/)
-void read_callback_func(uint16_t item_addr, uint8_t &dxl_err_code)
+void read_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
 {
-  (void)item_addr, (void)dxl_err_code;
+  (void)dxl_err_code, (void)arg;
+
+  switch(item_addr)
+  {
+    case ADDR_DXL_SLAVE_BAUDRATE:
+      break;
+
+  }
+
 }
 
 // Function to update data according to master write request.
 // If you use dxl_err_code, you can send the packet's error code to the Master.
 // See the DYNAMIXEL Protocol documentation for this. 
 // (http://emanual.robotis.com/docs/kr/dxl/protocol2/)
-void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code)
+void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
 {
-  (void)dxl_err_code;
+  (void)dxl_err_code, (void)arg;
 
   switch(item_addr)
   {
     case ADDR_DXL_SLAVE_BAUDRATE:
-      EEPROM.writeBytes(ADDR_DXL_SLAVE_BAUDRATE, (const void*)&config_dxl_slave_baudrate_idx, sizeof(config_dxl_slave_baudrate_idx));
-      dxl_slave_baudrate = getBaudrateValueFromIndex(config_dxl_slave_baudrate_idx);
-      config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);
-      dxl_slave_port.begin(dxl_master_baudrate);
-      EEPROM.commit();
+      if(getBaudrateValueFromIndex(config_dxl_slave_baudrate_idx) != 0){
+        EEPROM.writeBytes(ADDR_DXL_SLAVE_BAUDRATE, (const void*)&config_dxl_slave_baudrate_idx, sizeof(config_dxl_slave_baudrate_idx));
+        dxl_slave_baudrate = getBaudrateValueFromIndex(config_dxl_slave_baudrate_idx);
+        dxl_slave_port.begin(dxl_slave_baudrate);
+        EEPROM.commit();
+      }else{
+        dxl_err_code = DXL_ERR_DATA_RANGE;
+      }
       break;
 
     case ADDR_ROS2_NODE_NAME:
@@ -295,16 +318,19 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code)
       break;
 
     case ADDR_DXL_MASTER_BAUDRATE:
-      EEPROM.writeBytes(ADDR_DXL_MASTER_BAUDRATE, (const void*)&config_dxl_master_baudrate_idx, sizeof(config_dxl_master_baudrate_idx));
-      dxl_master_baudrate = getBaudrateValueFromIndex(config_dxl_master_baudrate_idx);
-      config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);      
-      XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver);
-      EEPROM.commit();
-      break;
+      if(getBaudrateValueFromIndex(config_dxl_master_baudrate_idx) != 0){
+        EEPROM.writeBytes(ADDR_DXL_SLAVE_BAUDRATE, (const void*)&config_dxl_master_baudrate_idx, sizeof(config_dxl_master_baudrate_idx));
+        dxl_master_baudrate = getBaudrateValueFromIndex(config_dxl_master_baudrate_idx);
+        XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver);
+        EEPROM.commit();
+      }else{
+        dxl_err_code = DXL_ERR_DATA_RANGE;
+      }    
 
     case ADDR_DXL_MASTER_PROTOCOL:
       if(config_dxl_master_protocol_ver != 1 && config_dxl_master_protocol_ver != 2){
         config_dxl_master_protocol_ver = dxl_master_protocol_ver==1.0?1:2;
+        dxl_err_code = DXL_ERR_DATA_RANGE;
       }else{
         EEPROM.writeBytes(ADDR_DXL_MASTER_PROTOCOL, (const void*)&config_dxl_master_protocol_ver, sizeof(config_dxl_master_protocol_ver));    
         dxl_master_protocol_ver = config_dxl_master_protocol_ver==1?1.0:2.0;
@@ -333,80 +359,4 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code)
       EEPROM.commit();
       break;
   }
-}
-
-uint32_t getBaudrateValueFromIndex(uint8_t baud_index)
-{
-  uint32_t baudrate;
-
-  switch(baud_index)
-  {
-    case 0:
-      baudrate = 9600;
-      break;
-    case 1:
-      baudrate = 57600;
-      break;
-    case 2:
-      baudrate = 115200;
-      break;
-    case 3:
-      baudrate = 1000000;
-      break;
-    case 4:
-      baudrate = 2000000;
-      break;
-    case 5:
-      baudrate = 3000000;
-      break;
-    case 6:
-      baudrate = 4000000;
-      break;
-    case 7:
-      baudrate = 4500000;
-      break;
-    default:
-      baudrate = 57600;
-      break;       
-  }
-
-  return baudrate;
-}
-
-uint8_t getBaudrateIndexFromValue(uint32_t baudrate)
-{
-  uint8_t baud_idx;
-
-  switch(baudrate)
-  {
-    case 9600:
-      baud_idx = 0;
-      break;
-    case 57600:
-      baud_idx = 1;
-      break;
-    case 115200:
-      baud_idx = 2;
-      break;
-    case 1000000:
-      baud_idx = 3;
-      break;
-    case 2000000:
-      baud_idx = 4;
-      break;
-    case 3000000:
-      baud_idx = 5;
-      break;
-    case 4000000:
-      baud_idx = 6;
-      break;
-    case 4500000:
-      baud_idx = 7;
-      break;
-    default:
-      baud_idx = 1;
-      break;      
-  }
-
-  return baud_idx;
 }
