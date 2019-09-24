@@ -124,7 +124,7 @@ void beginDXLSlaveToConfig(uint32_t port_baud)
   dxl_slave.addControlItem(ADDR_ROS2_NODE_NAME, (uint8_t*)config_ros2_node_name, sizeof(config_ros2_node_name));
   dxl_slave.addControlItem(ADDR_AUTO_SCAN_START_ID, config_start_id_to_scan);
   dxl_slave.addControlItem(ADDR_AUTO_SCAN_END_ID, config_end_id_to_scan);
-  dxl_slave.addControlItem(ADDR_AUTO_SCAN_INTERVAL_MS, auto_scan_interval_ms);
+  dxl_slave.addControlItem(ADDR_AUTO_SCAN_INTERVAL_MS, config_auto_scan_interval_ms);
   dxl_slave.addControlItem(ADDR_DXL_MASTER_BAUDRATE, config_dxl_master_baudrate_idx);
   dxl_slave.addControlItem(ADDR_DXL_MASTER_PROTOCOL, config_dxl_master_protocol_ver);
   dxl_slave.addControlItem(ADDR_WIFI_SSID, (uint8_t*)config_wifi_ssid, sizeof(config_wifi_ssid));
@@ -295,16 +295,16 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
       break;
 
     case ADDR_AUTO_SCAN_START_ID:
-      EEPROM.writeBytes(ADDR_AUTO_SCAN_START_ID, (const void*)&config_start_id_to_scan, sizeof(config_start_id_to_scan));
       if(XELNetworkMaster::initScan(config_start_id_to_scan, end_id_to_scan, auto_scan_interval_ms) == true){
+        EEPROM.writeBytes(ADDR_AUTO_SCAN_START_ID, (const void*)&config_start_id_to_scan, sizeof(config_start_id_to_scan));
         start_id_to_scan = config_start_id_to_scan;
         EEPROM.commit();
       }
       break;
 
     case ADDR_AUTO_SCAN_END_ID:
-      EEPROM.writeBytes(ADDR_AUTO_SCAN_END_ID, (const void*)&config_end_id_to_scan, sizeof(config_end_id_to_scan));
       if(XELNetworkMaster::initScan(start_id_to_scan, config_end_id_to_scan, auto_scan_interval_ms) == true){
+        EEPROM.writeBytes(ADDR_AUTO_SCAN_END_ID, (const void*)&config_end_id_to_scan, sizeof(config_end_id_to_scan));
         end_id_to_scan = config_end_id_to_scan;
         EEPROM.commit();
       }
