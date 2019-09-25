@@ -262,8 +262,11 @@ void read_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
   switch(item_addr)
   {
     case ADDR_DXL_SLAVE_BAUDRATE:
+      config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_port.getBaud());
       break;
-
+    case ADDR_DXL_SLAVE_BAUDRATE:
+      config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);
+      break;      
   }
 
 }
