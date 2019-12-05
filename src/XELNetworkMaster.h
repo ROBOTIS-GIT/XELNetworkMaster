@@ -19,6 +19,43 @@
 
 #include "utility/XELNetworkCommon.h"
 
+class Esp32SerialPortHandler : public DYNAMIXEL::SerialPortHandler
+{
+  public:
+    Esp32SerialPortHandler(HardwareSerial& port, const int dir_pin = -1)
+    : SerialPortHandler(port, dir_pin), port_(port), dir_pin_(dir_pin), baud_(1000000)
+    {}
+
+  virtual void begin(unsigned long baud) override
+  {
+    if(getOpenState() == true){
+      port_.updateBaudRate(baud);
+    }else{
+      port_.begin(baud);
+      if(dir_pin_ != -1){
+        pinMode(dir_pin_, OUTPUT);
+        digitalWrite(dir_pin_, LOW);
+        while(digitalRead(dir_pin_) != LOW);
+      }
+      setOpenState(true);
+    }
+    baud_ = baud;
+  }
+
+  virtual unsigned long getBaud() const override
+  {
+    return baud_;
+  }
+
+  private:
+    HardwareSerial& port_;
+    const int dir_pin_;
+    unsigned long baud_;
+    bool is_begin_;
+};
+
+DYNAMIXEL::SerialPortHandler* getMasterPortHandler();
+
 namespace XELNetworkMaster{
 
 bool initDXLMaster(HardwareSerial& dxl_port_serial, int dxl_dir_pin);
@@ -31,6 +68,5 @@ bool begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver = 2.0);
 void run();
 
 }//namespace XELNetworkMaster
-
 
 #endif /* XEL_NETWORK_MASTER_H_ */

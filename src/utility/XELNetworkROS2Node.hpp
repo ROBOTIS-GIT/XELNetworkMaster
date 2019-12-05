@@ -29,8 +29,14 @@ class XELNetworkROS2Node:public ros2::Node
 {
   public:
     XELNetworkROS2Node(const char* node_name)
-    : Node(node_name)
+    : Node(node_name), node_name_(node_name)
     {}
+
+    bool recreateNode()
+    {
+      this->recreate(node_name_);
+      return this->getNodeRegisteredState();
+    }
 
     template <typename MsgT>
     bool createNewTopic(TopicInfo_t& info)
@@ -73,6 +79,7 @@ class XELNetworkROS2Node:public ros2::Node
     }
 
   private:
+    const char* node_name_;
 };
 
 #endif /* XEL_NETWORK_ROS2_NODE_H_ */

@@ -16,6 +16,8 @@
 
 #include <XELNetworkMaster.h>
 
+#define DEBUG_SERIAL Serial1
+
 // Communication port setting for communication with ROS2.
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -29,10 +31,10 @@ uint16_t agent_port = 2019; //AGENT port number
 
 // Settings to communicate with other SLAVE devices (SensorXEL, etc.)
 // by acting as master of the DYNAMIXEL protocol.
-HardwareSerial& DXL_MASTER_SERIAL = Serial2;
-const int DXL_MASTER_DIR_PIN = 15;
-uint32_t dxl_master_baudrate = 57600;
+uint32_t dxl_master_baudrate = 1000000;
 float dxl_master_protocol_ver = 2.0;
+
+// The speed of the port to use for configuration. (beginDXLSlaveToConfig, runDXLSlaveToConfig)
 uint32_t dxl_slave_baudrate = 1000000;
 
 // Interval time setting to scan slave devices periodically for Plug And Play.
@@ -42,36 +44,127 @@ uint32_t auto_scan_interval_ms = 200;
 // Therefore, by setting the range of IDs to scan,
 // you can scan the same ID in shorter periods.
 uint8_t start_id_to_scan = 0;
-uint8_t end_id_to_scan = 20;
-
+uint8_t end_id_to_scan = 5;
 
 WiFiUDP udp;
+uint32_t pre_time_led, pre_time;
+enum OP_MODE{
+  OP_XELNETWORK = 0,
+  OP_BYPASS_USB_DXL
+};
+uint8_t op_mode = OP_XELNETWORK;
+uint8_t pre_op_mode;
 
 void setup() {
   // put your setup code here, to run once:
+  pre_op_mode = op_mode;
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BUTTON_BUILTIN, INPUT_PULLUP);
+  DEBUG_SERIAL.begin(115200);
+
   getConfigFromEEPROM();
   beginDXLSlaveToConfig(dxl_slave_baudrate);
 
-  WiFi.begin(p_ssid, p_ssid_pw);
-  while(WiFi.status() != WL_CONNECTED){
+  while(XELNetworkMaster::initDXLMaster(DEFAULT_DXL_SERIAL, DEFAULT_DXL_PIN) == false)
+  {
+    printErrAndLED(" [Fail] XELNetworkMaster::initDXLMaster", 50);
     runDXLSlaveToConfig();
   }
+  DEBUG_SERIAL.println("[Success] XELNetworkMaster::initDXLMaster");
 
-  XELNetworkMaster::initDXLMaster(DXL_MASTER_SERIAL, DXL_MASTER_DIR_PIN);
-  XELNetworkMaster::initROS2(udp, p_agent_ip, agent_port);
-  XELNetworkMaster::initScan(start_id_to_scan, end_id_to_scan, auto_scan_interval_ms);
-  XELNetworkMaster::initNode(p_ros2_node_name);
-  XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver);
+  checkButtonAndChangeMode();
+
+  WiFi.begin(p_ssid, p_ssid_pw);
+  while(WiFi.status() != WL_CONNECTED){
+    checkButtonAndChangeMode();
+    if(op_mode == OP_XELNETWORK){
+      // To change the settings even if the connection with the AP is not possible.
+      runDXLSlaveToConfig();
+      // LED
+      if(millis() - pre_time_led >= 500){
+        pre_time_led = millis();
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      }
+    }else if(op_mode == OP_BYPASS_USB_DXL){
+      serial2DXL();
+      // LED
+      if(millis() - pre_time_led >= 200){
+        pre_time_led = millis();
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      }
+    }
+  }
+
+  while(op_mode == OP_BYPASS_USB_DXL){
+    checkButtonAndChangeMode();
+    serial2DXL();
+    // LED
+    if(millis() - pre_time_led >= 200){
+      pre_time_led = millis();
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }    
+  }
+
+  while(XELNetworkMaster::initROS2(udp, p_agent_ip, agent_port) == false)
+  {
+    printErrAndLED(" [Fail] XELNetworkMaster::initROS2", 50);
+    runDXLSlaveToConfig();
+  }
+  DEBUG_SERIAL.println("[Success] XELNetworkMaster::initROS2");
+
+  while(XELNetworkMaster::initNode(p_ros2_node_name) == false)
+  {
+    DEBUG_SERIAL.println(" [Fail] XELNetworkMaster::initNode");
+    pre_time = millis();
+    while(millis()-pre_time < 10000){
+      // LED
+      if(millis() - pre_time_led >= 50){
+        pre_time_led = millis();
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      }      
+      runDXLSlaveToConfig();
+    }
+    DEBUG_SERIAL.println("\t [INFO] Retry initNode");
+  }
+  DEBUG_SERIAL.println("[Success] XELNetworkMaster::initNode");
+
+  while(XELNetworkMaster::initScan(start_id_to_scan, end_id_to_scan, auto_scan_interval_ms) == false)
+  {
+    printErrAndLED(" [Fail] XELNetworkMaster::initScan", 50);
+    runDXLSlaveToConfig();
+  }
+  DEBUG_SERIAL.println("[Success] XELNetworkMaster::initScan");
+
+  while(XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver) == false)
+  {
+    printErrAndLED(" [Fail] XELNetworkMaster::begin", 50);
+    runDXLSlaveToConfig();
+  }
+  DEBUG_SERIAL.println("[Success] XELNetworkMaster::begin");
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  runDXLSlaveToConfig();
-
-  XELNetworkMaster::run();
+  checkButtonAndChangeMode();
+  if(op_mode == OP_XELNETWORK){  
+    // Communication for master configuration(network, scan method, etc).
+    runDXLSlaveToConfig();
+    // Detect each XEL and act as a bridge between XEL and ROS2.
+    XELNetworkMaster::run();
+    // LED
+    if(millis() - pre_time_led >= 1000){
+      pre_time_led = millis();
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+  }else if(op_mode == OP_BYPASS_USB_DXL){
+    serial2DXL();
+    // LED
+    if(millis() - pre_time_led >= 200){
+      pre_time_led = millis();
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+  }
 }
-
-
 
 
 
@@ -80,13 +173,13 @@ void loop() {
 #include <EEPROM.h>
 HardwareSerial& DXL_SLAVE_SERIAL = Serial;
 const uint16_t COMMXEL_W_MODEL_NUM = 0x5042;
-DYNAMIXEL::SerialPortHandler dxl_slave_port(DXL_SLAVE_SERIAL);
-DYNAMIXEL::Slave dxl_slave(dxl_slave_port, COMMXEL_W_MODEL_NUM);
+Esp32SerialPortHandler dxl_slave_port(DXL_SLAVE_SERIAL);
+DYNAMIXEL::Slave dxl_slave(COMMXEL_W_MODEL_NUM);
 
 enum CommXELItemAddr{
-  // ADDR_MODEL_NUMBER    = 0, //Default setting in the Slave class.
-  // ADDR_FIRMWARE_VER    = 6, //Default setting in the Slave class.
-  // ADDR_ID              = 7, //Default setting in the Slave class.
+  // ADDR_ITEM_MODEL_NUMBER    = 0, //Default setting in the Slave class.
+  // ADDR_ITEM_FIRMWARE_VER    = 6, //Default setting in the Slave class.
+  // ADDR_ITEM_ID              = 7, //Default setting in the Slave class.
   ADDR_DXL_SLAVE_BAUDRATE        = 8,   //1byte
   ADDR_ROS2_NODE_NAME            = 10,  //32byte char
   ADDR_AUTO_SCAN_START_ID        = 50,  //uint8_t
@@ -96,8 +189,8 @@ enum CommXELItemAddr{
   ADDR_DXL_MASTER_PROTOCOL       = 59,  //uint8_t
   ADDR_WIFI_SSID                 = 60,  //32byte char
   ADDR_WIFI_SSID_PW              = 92,  //32byte char
-  ADDR_MICRO_XRCE_DDS_AGENT_IP   = 124, //12byte char "xxx.xxx.xxx"
-  ADDR_MICRO_XRCE_DDS_AGENT_PORT = 136  //uint16_t
+  ADDR_MICRO_XRCE_DDS_AGENT_IP   = 124, //16byte char "xxx.xxx.xxx.xxx"
+  ADDR_MICRO_XRCE_DDS_AGENT_PORT = 140  //uint16_t
 };
 
 static uint8_t config_dxl_slave_baudrate_idx;
@@ -116,6 +209,7 @@ static uint16_t config_u_xrce_agent_port;
 void beginDXLSlaveToConfig(uint32_t port_baud)
 {
   dxl_slave_port.begin(port_baud);
+  dxl_slave.setPort((DXLPortHandler*)&dxl_slave_port);
 
   dxl_slave.setFirmwareVersion(1);
   dxl_slave.setID(200);
@@ -262,9 +356,9 @@ void read_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
   switch(item_addr)
   {
     case ADDR_DXL_SLAVE_BAUDRATE:
-      config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_port.getBaud());
+      config_dxl_slave_baudrate_idx = getBaudrateIndexFromValue(dxl_slave_baudrate);
       break;
-    case ADDR_DXL_SLAVE_BAUDRATE:
+    case ADDR_DXL_MASTER_BAUDRATE:
       config_dxl_master_baudrate_idx = getBaudrateIndexFromValue(dxl_master_baudrate);
       break;      
   }
@@ -288,7 +382,7 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
         dxl_slave_port.begin(dxl_slave_baudrate);
         EEPROM.commit();
       }else{
-        dxl_err_code = DXL_ERR_DATA_RANGE;
+        dxl_err_code = DXL2_0_ERR_DATA_RANGE;
       }
       break;
 
@@ -327,13 +421,13 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
         XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver);
         EEPROM.commit();
       }else{
-        dxl_err_code = DXL_ERR_DATA_RANGE;
+        dxl_err_code = DXL2_0_ERR_DATA_RANGE;
       }    
 
     case ADDR_DXL_MASTER_PROTOCOL:
       if(config_dxl_master_protocol_ver != 1 && config_dxl_master_protocol_ver != 2){
         config_dxl_master_protocol_ver = dxl_master_protocol_ver==1.0?1:2;
-        dxl_err_code = DXL_ERR_DATA_RANGE;
+        dxl_err_code = DXL2_0_ERR_DATA_RANGE;
       }else{
         EEPROM.writeBytes(ADDR_DXL_MASTER_PROTOCOL, (const void*)&config_dxl_master_protocol_ver, sizeof(config_dxl_master_protocol_ver));    
         dxl_master_protocol_ver = config_dxl_master_protocol_ver==1?1.0:2.0;
@@ -363,3 +457,91 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
       break;
   }
 }
+
+
+
+
+const uint16_t BUFFER_SIZE = 1024;
+uint8_t buffer[BUFFER_SIZE];
+
+void serial2DXL()
+{
+  static DYNAMIXEL::SerialPortHandler* p_dxl_port;  
+  uint16_t len, i;
+ 
+  p_dxl_port = getMasterPortHandler();
+  if(p_dxl_port == nullptr){
+    return;
+  }
+
+  len = Serial.available();
+  if(len > 0){
+    if(len > BUFFER_SIZE){
+      len = BUFFER_SIZE;
+    }
+    for(i=0; i<len; i++){
+      buffer[i] = Serial.read();
+    }
+    p_dxl_port->write(buffer, len);
+  }
+
+  len = p_dxl_port->available(); 
+  if(len > 0){
+    if(len > BUFFER_SIZE){
+      len = BUFFER_SIZE;
+    }
+    for(i=0; i<len; i++){
+      buffer[i] = p_dxl_port->read();
+    }
+    Serial.write(buffer, len);
+  }
+}
+
+void checkButtonAndChangeMode()
+{
+  static DYNAMIXEL::SerialPortHandler* p_dxl_port;
+  uint32_t pre_time;
+  uint32_t button_pressed_time;
+
+  pre_time = millis();
+  while(digitalRead(BUTTON_BUILTIN) == LOW)
+  {
+    // LED
+    if(millis() - pre_time_led >= 50){
+      pre_time_led = millis();
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+  }
+  button_pressed_time = millis()-pre_time;
+  
+  if(button_pressed_time >= 1000 
+  && pre_op_mode == OP_XELNETWORK){
+    p_dxl_port = getMasterPortHandler();
+    if(p_dxl_port == nullptr){
+      return;
+    }    
+    op_mode = OP_BYPASS_USB_DXL;
+    DEBUG_SERIAL.println("\t [INFO] Entered BYPASS Mode");
+    pre_op_mode = op_mode;    
+  }else if(button_pressed_time > 100 && button_pressed_time < 1000 
+  && pre_op_mode == OP_BYPASS_USB_DXL){
+    p_dxl_port = getMasterPortHandler();
+    if(p_dxl_port == nullptr){
+      return;
+    }    
+    op_mode = OP_XELNETWORK;
+    DEBUG_SERIAL.println("\t [INFO] Entered XELNetwork Plug and Play Mode");
+    pre_op_mode = op_mode;
+  }
+}
+
+
+void printErrAndLED(const char* p_messesge, uint32_t interval_ms)
+{
+  if(millis() - pre_time_led >= interval_ms){
+    pre_time_led = millis();
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    DEBUG_SERIAL.println(p_messesge);
+  }
+}
+

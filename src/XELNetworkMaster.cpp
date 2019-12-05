@@ -62,11 +62,20 @@ static bool createNewTopicWithXELItem(TopicInfo_t& topic_item);
 static ros2::CallbackFunc getCallbackFromTopicItemId(uint8_t topic_item_id);
 
 
+DYNAMIXEL::SerialPortHandler* getMasterPortHandler()
+{
+  return p_dxl_port;
+}
+
+
 bool XELNetworkMaster::initDXLMaster(HardwareSerial& dxl_port_serial, int dxl_dir_pin)
 {
-  static DYNAMIXEL::SerialPortHandler dxl_port(dxl_port_serial, dxl_dir_pin);
-  static DYNAMIXEL::Master dxl(dxl_port);
+  static Esp32SerialPortHandler dxl_port(dxl_port_serial, dxl_dir_pin);
+  static DYNAMIXEL::Master dxl;
 
+  dxl_port.begin(1000000);
+  dxl.setPort((DXLPortHandler*)&dxl_port);
+  
   p_dxl_port = &dxl_port;
   p_dxl_master = &dxl;
   
@@ -114,10 +123,20 @@ bool XELNetworkMaster::initScan(uint8_t start_id, uint8_t end_id, uint32_t inter
 
 bool XELNetworkMaster::initNode(const char* node_name)
 {
-  if(p_ros2_node == nullptr)
+  bool ret = false;
+
+  if(p_ros2_node == nullptr){
     p_ros2_node = new XELNetworkROS2Node(node_name);
 
-  return p_ros2_node!=nullptr?true:false;
+    if(p_ros2_node!=nullptr){
+      ret = p_ros2_node->getNodeRegisteredState();
+    }    
+  }else{
+    p_ros2_node->recreateNode();
+    ret = p_ros2_node->getNodeRegisteredState();
+  }
+  
+  return ret;
 }
 
 bool XELNetworkMaster::begin(uint32_t dxl_port_baud, float dxl_port_protocol_ver)

@@ -1,0 +1,44 @@
+<profiles>
+    <participant profile_name="xelnetwork">
+        <rtps>
+            <name>xelnetwork_node</name>
+            <builtin>
+                <domainId>0</domainId>
+            </builtin>
+        </rtps>
+    </participant>
+
+
+    <data_writer profile_name="arduino_chatter">
+        <topic>
+            <kind>NO_KEY</kind>
+            <name>rt/arduino_chatter</name>
+            <dataType>std_msgs::msg::dds_::String_</dataType>
+            <historyQos>
+                <kind>KEEP_LAST</kind>
+                <depth>10</depth>
+            </historyQos>
+        </topic>
+    </data_writer>
+
+
+    <data_reader profile_name="arduino_led">
+        <topic>
+            <name>rt/arduino_led</name>
+            <dataType>std_msgs::msg::dds_::Bool_</dataType>
+        </topic>
+    </data_reader>
+
+
+    <topic profile_name="Bool">
+        <kind>NO_KEY</kind>
+        <name>Bool</name>
+        <dataType>std_msgs::msg::dds_::Bool_</dataType>
+    </topic>
+
+    <topic profile_name="String">
+        <kind>NO_KEY</kind>
+        <name>String</name>
+        <dataType>std_msgs::msg::dds_::String_</dataType>
+    </topic>
+</profiles>
