@@ -202,7 +202,7 @@ static uint8_t config_dxl_master_baudrate_idx;
 static uint8_t config_dxl_master_protocol_ver;
 static char config_wifi_ssid[32];
 static char config_wifi_ssid_pw[32];
-static char config_u_xrce_agent_ip[12];
+static char config_u_xrce_agent_ip[16];
 static uint16_t config_u_xrce_agent_port;
 
 
@@ -416,7 +416,7 @@ void write_callback_func(uint16_t item_addr, uint8_t &dxl_err_code, void* arg)
 
     case ADDR_DXL_MASTER_BAUDRATE:
       if(getBaudrateValueFromIndex(config_dxl_master_baudrate_idx) != 0){
-        EEPROM.writeBytes(ADDR_DXL_SLAVE_BAUDRATE, (const void*)&config_dxl_master_baudrate_idx, sizeof(config_dxl_master_baudrate_idx));
+        EEPROM.writeBytes(ADDR_DXL_MASTER_BAUDRATE, (const void*)&config_dxl_master_baudrate_idx, sizeof(config_dxl_master_baudrate_idx));
         dxl_master_baudrate = getBaudrateValueFromIndex(config_dxl_master_baudrate_idx);
         XELNetworkMaster::begin(dxl_master_baudrate, dxl_master_protocol_ver);
         EEPROM.commit();
