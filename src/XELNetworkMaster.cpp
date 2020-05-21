@@ -70,7 +70,11 @@ DYNAMIXEL::SerialPortHandler* getMasterPortHandler()
 
 bool XELNetworkMaster::initDXLMaster(HardwareSerial& dxl_port_serial, int dxl_dir_pin)
 {
+#if defined(ESP_PLATFORM)
   static Esp32SerialPortHandler dxl_port(dxl_port_serial, dxl_dir_pin);
+#else
+  static DYNAMIXEL::SerialPortHandler dxl_port(dxl_port_serial, dxl_dir_pin);
+#endif
   static DYNAMIXEL::Master dxl;
 
   dxl_port.begin(1000000);

@@ -19,6 +19,11 @@
 
 #include "utility/XELNetworkCommon.h"
 
+#if defined(ARDUINO_CommXEL)
+#include <LwIP.h>
+#include <STM32Ethernet.h>
+#include <EthernetUdp.h>
+#elif defined(ESP_PLATFORM)
 class Esp32SerialPortHandler : public DYNAMIXEL::SerialPortHandler
 {
   public:
@@ -53,6 +58,7 @@ class Esp32SerialPortHandler : public DYNAMIXEL::SerialPortHandler
     unsigned long baud_;
     bool is_begin_;
 };
+#endif /* ESP_PLATFORM */
 
 DYNAMIXEL::SerialPortHandler* getMasterPortHandler();
 
