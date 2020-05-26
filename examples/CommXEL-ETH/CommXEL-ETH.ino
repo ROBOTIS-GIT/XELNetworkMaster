@@ -14,7 +14,6 @@
 * limitations under the License.
 *******************************************************************************/
 
-#include "user_config.h"
 #include <XELNetworkMaster.h>
 #include <EEPROM.h>
 
